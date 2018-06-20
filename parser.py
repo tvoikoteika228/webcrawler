@@ -3,7 +3,11 @@ from bs4 import BeautifulSoup
 from urllib.request import urlopen
 import sqlite3
 import ssl
+import time
+from memory_profiler import memory_usage
 
+
+start_time = time.time()
 ssl._create_default_https_context = ssl._create_unverified_context
 
 parser = argparse.ArgumentParser()
@@ -17,11 +21,10 @@ pars = parser.parse_args()
 
 table = sqlite3.connect('database.db')
 cursor = table.cursor()
-
+url = pars.url
 if pars.arg == 'load':
-    page = urlopen(pars.url)
+    page = urlopen(url)
     html = BeautifulSoup(page, "html.parser")
-    print(html.prettify())
     arr = []
     for link in html.find_all('a'):
         if link.has_attr('href') and not link['href'].startswith('/') and not link['href'].startswith('mailto'):
@@ -29,21 +32,21 @@ if pars.arg == 'load':
     a = -1
     for i in arr:
         a += 1
-        print(i)
         code = urlopen(i).getcode()
         if code not in [200, 301]:
             continue
         pageopen = urlopen(i)
         pageopen = BeautifulSoup(pageopen, "html.parser")
         title = pageopen.html.head.title.text
-        cursor.execute("insert into urls (source, url, title, html) values (?,?,?,?)", (pars.url, i, title, str(pageopen)))
-        print('OK')
+        cursor.execute("insert into urls (source, url, title, html) values (?,?,?,?)", (url, i, title, str(pageopen)))
+    print("ok, execution time: {a}s, peak memory usage:{b} Mb".format(a=int(time.time() - start_time),b=int(max(memory_usage()))))
 elif pars.arg == 'get':
-    cursor.execute("select url, title from urls where source=? limit ?",(pars.url, pars.number))
+    number = pars.number
+    if(number == None):
+        number = 9999999999
+    cursor.execute("select url, title from urls where source=? limit ?", (url, number))
     answ = cursor.fetchall()
-    for i in range(int(pars.number)):
+    for i in range(len(answ)):
         print(f"{answ[i][0]}: {answ[i][1]}")
-
-
 table.commit()
 cursor.close()
